@@ -47,6 +47,9 @@ export default function Landing() {
               <span>✅ App Store & Google Play uyumlu</span>
               <span>•</span>
               <span>🔔 Push bildirim</span>
+              <a href="/dashboard" className="inline-flex h-11 items-center rounded-xl border px-5 font-semibold hover:bg-slate-50">
+  Panele Git
+</a>
             </div>
           </div>
           <div className="relative">
