@@ -1,13 +1,13 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
-      { protocol: 'https', hostname: 'picsum.photos' }
-    ]
-  }
-  /* config options here */
+      { protocol: 'https', hostname: 'picsum.photos' },
+      { protocol: 'https', hostname: 'utfs.io' } // UploadThing dosyaları
+    ],
+  },
 };
 
 export default nextConfig;

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-
+import ThemeUploader from "../../components/ThemeUploader"; // en üst importlara ekle
 /* ------------ types ------------- */
 type IconName = 'home'|'shopping_bag'|'person'|'favorite'|'search'|'info';
 type IconKind = 'builtin' | 'emoji' | 'image';
@@ -26,7 +26,13 @@ type ThemeDraft = {
   navigation: { tabs: Tab[] };
   home: { bannerImage: string; bannerLink: string; noticeText: string };
 };
-
+<div className="mt-2">
+  <ThemeUploader
+    text="Banner Yükle"
+    onUploaded={(url) => setHome('bannerImage', url)}
+  />
+  <p className="mt-1 text-xs text-slate-500">JPG/PNG, max 2MB. Yüklendikten sonra adres otomatik dolar.</p>
+</div>
 /* ----------- presets ------------ */
 const SAMPLE_BANNERS = [
   'https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=1200&auto=format&fit=crop',
@@ -63,6 +69,7 @@ const initialDraft: ThemeDraft = {
       { label: 'Shop',  url: 'https://ornek.com/kategori',   iconKind: 'builtin', builtin: 'shopping_bag' },
       { label: 'Hesap', url: 'https://ornek.com/account',    iconKind: 'builtin', builtin: 'person' },
     ],
+    
   },
   home: {
     bannerImage: SAMPLE_BANNERS[0],
@@ -183,6 +190,11 @@ export default function ThemeEditor() {
                       <SegButton active={t.iconKind==='emoji'} onClick={() => setTab(i,'iconKind','emoji')}>Emoji</SegButton>
                       <SegButton active={t.iconKind==='image'} onClick={() => setTab(i,'iconKind','image')}>Resim URL</SegButton>
                     </div>
+                    <ThemeUploader
+  text="İkon Yükle"
+  onUploaded={(url) => setTab(i, 'iconImage', url)}
+/>
+<p className="text-xs text-slate-500">32×32 önerilir. Şeffaf PNG güzel durur.</p>
 
                     {t.iconKind === 'builtin' && (
                       <select
@@ -412,4 +424,8 @@ function SegButton({ active, onClick, children }: { active: boolean; onClick: ()
       {children}
     </button>
   );
+}
+
+function setHome(arg0: string, url: string): void {
+    throw new Error('Function not implemented.');
 }
