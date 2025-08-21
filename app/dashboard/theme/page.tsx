@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import ThemeUploader from '../../components/ThemeUploader';
 
+/* ================= Types ================= */
 type IconName = 'home'|'shopping_bag'|'person'|'favorite'|'search'|'info';
 type IconKind = 'builtin' | 'emoji' | 'image';
 const FONT_OPTIONS = ['System','Inter','Roboto','Poppins'] as const;
@@ -23,6 +24,7 @@ type ThemeDraft = {
     textColor: string;
     fontFamily: FontFamily;
     tabs: Tab[];
+
     bannerEnabled: boolean;
     bannerImage?: string;
     bannerLink?: string;
@@ -32,7 +34,7 @@ type ThemeDraft = {
   };
 };
 
-/* Presets */
+/* ================ Presets ================ */
 const SAMPLE_BANNERS = [
   'https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=1200&auto=format&fit=crop',
   'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?q=80&w=1200&auto=format&fit=crop',
@@ -42,7 +44,7 @@ const SAMPLE_BANNERS = [
 const COLOR_SWATCHES = ['#111827','#000000','#374151','#6B7280','#EA580C','#F59E0B','#0EA5E9','#22C55E','#8B5CF6','#EF4444','#FFFFFF'] as const;
 const EMOJI_SET = ['🏠','🛍️','👤','❤️','🔎','ℹ️','⭐️','🔥','✨','🧁','🍫','🛒'] as const;
 
-/* Helpers */
+/* ================ Helpers ================ */
 const isString = (v: unknown): v is string => typeof v === 'string';
 const cn = (...p: Array<string | false | undefined>) => p.filter(Boolean).join(' ');
 const hexToRgba = (hex: string, a = 1) => {
@@ -70,8 +72,11 @@ function migrateDraft(raw: unknown): ThemeDraft {
   const shell = (d.shell as Record<string, unknown>) ?? {};
   const tabsUnknown = Array.isArray(shell.tabs) ? (shell.tabs as unknown[]) : [];
   const fontCandidate = shell.fontFamily;
-  const fontFamily: FontFamily = ['System','Inter','Roboto','Poppins'].includes(String(fontCandidate))
-    ? (fontCandidate as FontFamily) : 'System';
+
+  const fontFamily: FontFamily =
+    ['System','Inter','Roboto','Poppins'].includes(String(fontCandidate))
+      ? (fontCandidate as FontFamily)
+      : 'System';
 
   return {
     site: { url: isString(site.url) ? site.url : 'https://www.arslanzade.com.tr/' },
@@ -84,10 +89,11 @@ function migrateDraft(raw: unknown): ThemeDraft {
       tabs: tabsUnknown.map((t) => {
         const tr = (t ?? {}) as Record<string, unknown>;
         const kindRaw = tr.iconKind;
-        const iconKind: IconKind = kindRaw==='image'||kindRaw==='emoji'||kindRaw==='builtin' ? (kindRaw as IconKind) : 'builtin';
+        const iconKind: IconKind =
+          kindRaw==='image'||kindRaw==='emoji'||kindRaw==='builtin' ? (kindRaw as IconKind) : 'builtin';
         return {
           label: isString(tr.label) ? tr.label : 'Yeni',
-          url: isString(tr.url) ? tr.url : 'https://ornek.com',
+          url: isString(tr.url) ? tr.url : '/',
           iconKind,
           builtin: (tr.builtin as IconName) ?? 'home',
           emoji: isString(tr.emoji) ? tr.emoji : '✨',
@@ -96,7 +102,7 @@ function migrateDraft(raw: unknown): ThemeDraft {
       }),
       bannerEnabled: Boolean(shell.bannerEnabled ?? false),
       bannerImage: isString(shell.bannerImage) ? shell.bannerImage : SAMPLE_BANNERS[0],
-      bannerLink: isString(shell.bannerLink) ? shell.bannerLink : 'https://ornek.com',
+      bannerLink: isString(shell.bannerLink) ? shell.bannerLink : '/',
       noticeText: isString(shell.noticeText) ? shell.noticeText : 'Bugün %15 indirim!',
       noticeBg: sanitizeHex(shell.noticeBg, '#FFF7ED'),
       noticeTextColor: sanitizeHex(shell.noticeTextColor, '#7C2D12'),
@@ -104,7 +110,7 @@ function migrateDraft(raw: unknown): ThemeDraft {
   };
 }
 
-/* Initial */
+/* ================ Initial ================ */
 const initialDraft: ThemeDraft = {
   site: { url: 'https://www.arslanzade.com.tr/' },
   shell: {
@@ -120,18 +126,20 @@ const initialDraft: ThemeDraft = {
     ],
     bannerEnabled: false,
     bannerImage: SAMPLE_BANNERS[0],
-    bannerLink: 'https://ornek.com',
+    bannerLink: '/',
     noticeText: 'Bugün %15 indirim!',
     noticeBg: '#FFF7ED',
     noticeTextColor: '#7C2D12',
   },
 };
 
+/* ================ Page ================== */
 export default function ThemeEditor() {
   const [draft, setDraft] = useState<ThemeDraft>(initialDraft);
   const [webUrl, setWebUrl] = useState<string>(initialDraft.site.url);
   const [frameKey, setFrameKey] = useState<number>(0);
   const [frameBlocked, setFrameBlocked] = useState<boolean>(false);
+  const [ingesting, setIngesting] = useState<boolean>(false);
   const loadTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -172,8 +180,9 @@ export default function ThemeEditor() {
     '--ap-notice-text': shell.noticeTextColor,
   } as React.CSSProperties;
 
-  // iPhone 14 Pro safe area
-  const SAFE_TOP = 34; // px
+  // iPhone 14 Pro safe areas
+  const SAFE_TOP = 34;      // notch yüksekliği
+  const SAFE_BOTTOM = 88;   // alt menü + padding
 
   const onFrameLoad = () => { if (loadTimer.current) clearTimeout(loadTimer.current); setFrameBlocked(false); };
   const tryLoad = () => {
@@ -183,8 +192,7 @@ export default function ThemeEditor() {
     loadTimer.current = setTimeout(() => setFrameBlocked(true), 2500);
   };
 
-  // --- Siteden menü & sepet & sipariş linklerini çek ---
-  const [ingesting, setIngesting] = useState(false);
+  // Siteden menü & sepet & sipariş linklerini çek
   const importMenuFromSite = async () => {
     const base = normalizeUrl(webUrl);
     if (!base) { alert('Geçerli bir site adresi gir.'); return; }
@@ -192,16 +200,12 @@ export default function ThemeEditor() {
       setIngesting(true);
       const res = await fetch(`/api/ingest?url=${encodeURIComponent(base)}`, { method: 'GET' });
       if (!res.ok) throw new Error('İndeksleme başarısız');
-      const data: {
-        home?: string; cart?: string; orders?: string;
-      } = await res.json();
+      const data: { home?: string; cart?: string; orders?: string } = await res.json();
 
-      // heuristics fallback
       const home = data.home || base;
       const cart = data.cart || new URL('/cart', base).toString();
       const orders = data.orders || new URL('/account/orders', base).toString();
 
-      // 3 sabit sekme ile doldur (Home / Sepet / Siparişlerim)
       const tabs: Tab[] = [
         { label:'Anasayfa', url: home, iconKind:'builtin', builtin:'home' },
         { label:'Sepet', url: cart, iconKind:'builtin', builtin:'shopping_bag' },
@@ -209,14 +213,12 @@ export default function ThemeEditor() {
       ];
       setDraft(d => ({ ...d, shell: { ...d.shell, tabs } }));
       alert('Menü bağlantıları çekildi.');
-    // ÖNCE
-// SONRA
-} catch (err: unknown) {
-  const msg = err instanceof Error ? err.message : 'Hata';
-  alert(`Alınamadı: ${msg}`);
-} finally {
-  setIngesting(false);
-}
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Hata';
+      alert(`Alınamadı: ${msg}`);
+    } finally {
+      setIngesting(false);
+    }
   };
 
   return (
@@ -253,7 +255,7 @@ export default function ThemeEditor() {
                 {ingesting ? 'Çekiliyor…' : 'Menüyü Siteden Çek'}
               </button>
             </div>
-            <p className="mt-2 text-xs text-slate-500">Not: Bazı siteler iframe’i engeller (X‑Frame‑Options/CSP). Engellenirse telefonda uyarı gösterilir.</p>
+            <p className="mt-2 text-xs text-slate-500">Bazı siteler iframe’i engeller (X‑Frame‑Options/CSP). Engellenirse telefonda uyarı gösterilir.</p>
           </section>
 
           {/* Tema (Shell) */}
@@ -394,7 +396,7 @@ export default function ThemeEditor() {
           </section>
         </div>
 
-        {/* RIGHT — Telefon önizleme (safe-area + overlay) */}
+        {/* RIGHT — Telefon önizleme */}
         <div className="space-y-4">
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="text-sm font-semibold text-slate-700 mb-3">Uygulama Önizleme</h3>
@@ -407,23 +409,23 @@ export default function ThemeEditor() {
 
                 {/* inner screen */}
                 <div className="absolute inset-1 rounded-[40px] overflow-hidden bg-white">
-                  {/* WebView (iframe) — safe top */}
+                  {/* WebView (iframe) — safe areas */}
                   {normalizeUrl(webUrl) ? (
                     <iframe
                       key={frameKey}
                       src={normalizeUrl(webUrl)}
-                      className="absolute inset-x-0 bottom-0"
-                      style={{ top: SAFE_TOP }}
+                      className="absolute left-0 right-0"
+                      style={{ top: SAFE_TOP, bottom: SAFE_BOTTOM }}
                       sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                       onLoad={onFrameLoad}
                     />
                   ) : (
-                    <div className="absolute inset-x-0 bottom-0" style={{ top: SAFE_TOP }}>
+                    <div className="absolute left-0 right-0" style={{ top: SAFE_TOP, bottom: SAFE_BOTTOM }}>
                       <FrameFallback text="Geçerli bir URL girin" />
                     </div>
                   )}
                   {frameBlocked && (
-                    <div className="absolute inset-x-0 bottom-0" style={{ top: SAFE_TOP }}>
+                    <div className="absolute left-0 right-0" style={{ top: SAFE_TOP, bottom: SAFE_BOTTOM }}>
                       <FrameFallback text="Site iframe’e izin vermiyor (X‑Frame‑Options/CSP)" />
                     </div>
                   )}
@@ -477,7 +479,7 @@ export default function ThemeEditor() {
                   </div>
                 </div>
               </div>
-              <div className="mt-2 text-xs text-slate-500">Boyut: 390×844 (iPhone 14 Pro). Tema sadece bu önizlemeye uygulanır.</div>
+              <div className="mt-2 text-xs text-slate-500">Boyut: 390×844 (iPhone 14 Pro). Tema yalnızca bu önizlemeye uygulanır.</div>
             </div>
           </section>
         </div>
@@ -486,7 +488,7 @@ export default function ThemeEditor() {
   );
 }
 
-/* Subcomponents */
+/* ================= Subcomponents ================= */
 function FrameFallback({ text }: { text: string }) {
   return (
     <div className="flex h-full w-full items-center justify-center bg-slate-50 text-slate-500 p-6 text-center">
