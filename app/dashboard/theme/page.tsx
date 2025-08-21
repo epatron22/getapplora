@@ -1,7 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Image from 'next/image';
 
-type Tab = { label: string; icon: string; url: string };
+type Tab = { label: string; icon: 'home'|'shopping_bag'|'person'|'favorite'|'search'|'info'; url: string };
 type ThemeDraft = {
   brand: {
     appName: string;
@@ -18,36 +19,38 @@ type ThemeDraft = {
 };
 
 const initialDraft: ThemeDraft = {
-  brand: {
-    appName: 'Mağazam',
-    primary: '#EA580C',
-    secondary: '#F59E0B',
-    darkMode: false,
-  },
+  brand: { appName: 'Mağazam', primary: '#EA580C', secondary: '#F59E0B', darkMode: false },
   navigation: {
     tabs: [
-      { label: 'Home', icon: 'home', url: 'https://ornek.com/' },
-      { label: 'Shop', icon: 'shopping_bag', url: 'https://ornek.com/kategori' },
-      { label: 'Hesap', icon: 'person', url: 'https://ornek.com/account' },
+      { label: 'Home',  icon: 'home',          url: 'https://ornek.com/' },
+      { label: 'Shop',  icon: 'shopping_bag',  url: 'https://ornek.com/kategori' },
+      { label: 'Hesap', icon: 'person',        url: 'https://ornek.com/account' },
     ],
   },
-  home: {
-    bannerImage: 'https://picsum.photos/800/400',
-    bannerLink: 'https://ornek.com',
-    noticeText: 'Bugün %15 indirim!',
-  },
+  home: { bannerImage: 'https://picsum.photos/800/400', bannerLink: 'https://ornek.com', noticeText: 'Bugün %15 indirim!' },
 };
 
 export default function ThemeEditor() {
   const [draft, setDraft] = useState<ThemeDraft>(initialDraft);
 
-  const updateBrand = (k: keyof ThemeDraft['brand'], v: any) =>
+  // Açılışta kaydedilmiş taslak varsa yükle
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('theme_draft');
+      if (saved) setDraft(JSON.parse(saved) as ThemeDraft);
+    } catch {}
+  }, []);
+
+  // ---- helpers (any KULLANMADAN) ----
+  const updateBrandStr = (k: 'appName'|'primary'|'secondary', v: string) =>
+    setDraft(d => ({ ...d, brand: { ...d.brand, [k]: v } }));
+  const updateBrandBool = (k: 'darkMode', v: boolean) =>
     setDraft(d => ({ ...d, brand: { ...d.brand, [k]: v } }));
 
-  const updateHome = (k: keyof ThemeDraft['home'], v: any) =>
+  const updateHomeStr = (k: 'bannerImage'|'bannerLink'|'noticeText', v: string) =>
     setDraft(d => ({ ...d, home: { ...d.home, [k]: v } }));
 
-  const updateTab = (i: number, k: keyof Tab, v: any) =>
+  const updateTab = <K extends keyof Tab>(i: number, k: K, v: Tab[K]) =>
     setDraft(d => {
       const tabs = [...d.navigation.tabs];
       tabs[i] = { ...tabs[i], [k]: v };
@@ -65,13 +68,19 @@ export default function ThemeEditor() {
 
   const onSaveDraft = () => {
     localStorage.setItem('theme_draft', JSON.stringify(draft));
-    alert('Taslak kaydedildi (localStorage). Sonra backend bağlarız.');
+    alert('Taslak kaydedildi (demo).');
   };
 
   const onPublish = () => {
-    // Şimdilik publish de localStorage’a yazıyor.
     localStorage.setItem('theme_published', JSON.stringify(draft));
-    alert('Yayınlandı (demo). Uygulama açılışta published.json’ı çekecek kurguyu sonra bağlarız.');
+    alert('Yayınlandı (demo).');
+  };
+
+  const onReset = () => {
+    localStorage.removeItem('theme_draft');
+    localStorage.removeItem('theme_published');
+    setDraft(initialDraft);
+    alert('Sıfırlandı.');
   };
 
   const bg = draft.brand.darkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-800';
@@ -91,22 +100,22 @@ export default function ThemeEditor() {
           <div className="mt-4 grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm text-slate-600">Uygulama Adı</label>
-              <input value={draft.brand.appName} onChange={e => updateBrand('appName', e.target.value)}
-                className="mt-1 w-full h-10 rounded-xl border px-3" />
+              <input value={draft.brand.appName} onChange={e => updateBrandStr('appName', e.target.value)}
+                     className="mt-1 w-full h-10 rounded-xl border px-3" />
             </div>
             <div>
               <label className="text-sm text-slate-600">Primary Renk (hex)</label>
-              <input value={draft.brand.primary} onChange={e => updateBrand('primary', e.target.value)}
-                className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="#EA580C" />
+              <input value={draft.brand.primary} onChange={e => updateBrandStr('primary', e.target.value)}
+                     className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="#EA580C" />
             </div>
             <div>
               <label className="text-sm text-slate-600">Secondary Renk (hex)</label>
-              <input value={draft.brand.secondary} onChange={e => updateBrand('secondary', e.target.value)}
-                className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="#F59E0B" />
+              <input value={draft.brand.secondary} onChange={e => updateBrandStr('secondary', e.target.value)}
+                     className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="#F59E0B" />
             </div>
             <div className="flex items-end">
               <label className="inline-flex items-center gap-2">
-                <input type="checkbox" checked={draft.brand.darkMode} onChange={e => updateBrand('darkMode', e.target.checked)} />
+                <input type="checkbox" checked={draft.brand.darkMode} onChange={e => updateBrandBool('darkMode', e.target.checked)} />
                 Koyu Tema
               </label>
             </div>
@@ -125,12 +134,12 @@ export default function ThemeEditor() {
                 <div>
                   <label className="text-sm text-slate-600">Etiket</label>
                   <input value={t.label} onChange={e => updateTab(i, 'label', e.target.value)}
-                    className="mt-1 w-full h-10 rounded-xl border px-3" />
+                         className="mt-1 w-full h-10 rounded-xl border px-3" />
                 </div>
                 <div>
                   <label className="text-sm text-slate-600">İkon</label>
-                  <select value={t.icon} onChange={e => updateTab(i, 'icon', e.target.value)}
-                    className="mt-1 w-full h-10 rounded-xl border px-3">
+                  <select value={t.icon} onChange={e => updateTab(i, 'icon', e.target.value as Tab['icon'])}
+                          className="mt-1 w-full h-10 rounded-xl border px-3">
                     <option value="home">home</option>
                     <option value="shopping_bag">shopping_bag</option>
                     <option value="person">person</option>
@@ -141,7 +150,7 @@ export default function ThemeEditor() {
                 </div>
                 <div className="flex gap-2">
                   <input value={t.url} onChange={e => updateTab(i, 'url', e.target.value)}
-                    className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="https://..." />
+                         className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="https://..." />
                   <button onClick={() => removeTab(i)} className="h-10 px-3 rounded-lg border hover:bg-slate-50">Sil</button>
                 </div>
               </div>
@@ -155,28 +164,31 @@ export default function ThemeEditor() {
           <div className="mt-4 grid gap-4">
             <div>
               <label className="text-sm text-slate-600">Banner Görseli URL</label>
-              <input value={draft.home.bannerImage} onChange={e => updateHome('bannerImage', e.target.value)}
-                className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="https://..." />
+              <input value={draft.home.bannerImage} onChange={e => updateHomeStr('bannerImage', e.target.value)}
+                     className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="https://..." />
             </div>
             <div>
               <label className="text-sm text-slate-600">Banner Linki</label>
-              <input value={draft.home.bannerLink} onChange={e => updateHome('bannerLink', e.target.value)}
-                className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="https://..." />
+              <input value={draft.home.bannerLink} onChange={e => updateHomeStr('bannerLink', e.target.value)}
+                     className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="https://..." />
             </div>
             <div>
               <label className="text-sm text-slate-600">Duyuru Metni</label>
-              <input value={draft.home.noticeText} onChange={e => updateHome('noticeText', e.target.value)}
-                className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="Bugün %15 indirim!" />
+              <input value={draft.home.noticeText} onChange={e => updateHomeStr('noticeText', e.target.value)}
+                     className="mt-1 w-full h-10 rounded-xl border px-3" placeholder="Bugün %15 indirim!" />
             </div>
           </div>
         </section>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button onClick={onSaveDraft} className="h-11 rounded-xl border border-slate-300 px-5 font-semibold hover:bg-slate-50">
             Taslağı Kaydet
           </button>
           <button onClick={onPublish} className="h-11 rounded-xl bg-amber-600 px-5 font-semibold text-white hover:bg-amber-700">
             Yayınla (Demo)
+          </button>
+          <button onClick={onReset} className="h-11 rounded-xl border border-red-300 px-5 font-semibold hover:bg-red-50">
+            Sıfırla
           </button>
         </div>
       </div>
@@ -189,7 +201,14 @@ export default function ThemeEditor() {
           </div>
 
           <div className="mt-4 rounded-2xl overflow-hidden">
-            <img src={draft.home.bannerImage} alt="banner" className="w-full h-40 object-cover" />
+            <Image
+              src={draft.home.bannerImage}
+              alt="banner"
+              width={800}
+              height={400}
+              className="w-full h-40 object-cover"
+              unoptimized
+            />
           </div>
 
           <div className="mt-4 text-sm border rounded-xl p-3">
