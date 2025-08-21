@@ -4,23 +4,38 @@ import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import ThemeUploader from '../../components/ThemeUploader';
 
-/* ===== Types ===== */
+/* ========= Types ========= */
 type IconName = 'home'|'shopping_bag'|'person'|'favorite'|'search'|'info';
 type IconKind = 'builtin' | 'emoji' | 'image';
+const FONT_OPTIONS = ['System','Inter','Roboto','Poppins'] as const;
 type FontFamily = (typeof FONT_OPTIONS)[number];
 
 type Tab = {
   label: string; url: string; iconKind: IconKind;
   builtin?: IconName; emoji?: string; iconImage?: string;
 };
+
 type ThemeDraft = {
-  brand: { appName: string; primary: string; secondary: string; textColor: string; fontFamily: FontFamily };
-  navigation: { tabs: Tab[] };
-  home: { bannerImage: string; bannerLink: string; noticeText: string };
-  site: { url: string }; // 🔹 yeni: webview
+  site: { url: string };
+  shell: {
+    appName: string;
+    primary: string;     // buton/aksan
+    secondary: string;   // ikincil aksan
+    textColor: string;   // metin
+    fontFamily: FontFamily;
+    tabs: Tab[];
+
+    // Seçmeli duyuru alanı
+    bannerEnabled: boolean;
+    bannerImage?: string;
+    bannerLink?: string;
+    noticeText?: string;
+    noticeBg?: string;   // duyuru bg
+    noticeTextColor?: string; // duyuru text
+  };
 };
 
-/* ===== Presets ===== */
+/* ========= Presets ========= */
 const SAMPLE_BANNERS = [
   'https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=1200&auto=format&fit=crop',
   'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?q=80&w=1200&auto=format&fit=crop',
@@ -29,54 +44,48 @@ const SAMPLE_BANNERS = [
 
 const COLOR_SWATCHES = ['#111827','#000000','#374151','#6B7280','#EA580C','#F59E0B','#0EA5E9','#22C55E','#8B5CF6','#EF4444','#FFFFFF'] as const;
 const EMOJI_SET = ['🏠','🛍️','👤','❤️','🔎','ℹ️','⭐️','🔥','✨','🧁','🍫','🛒'] as const;
-const FONT_OPTIONS = ['System','Inter','Roboto','Poppins'] as const;
 
-/* ===== Helpers ===== */
+/* ========= Helpers ========= */
 const isString = (v: unknown): v is string => typeof v === 'string';
 const cn = (...p: Array<string | false | undefined>) => p.filter(Boolean).join(' ');
 const hexToRgba = (hex: string, a = 1) => {
-  const h = hex.replace('#',''); const r = parseInt(h.slice(0,2),16);
-  const g = parseInt(h.slice(2,4),16); const b = parseInt(h.slice(4,6),16);
+  const h = (hex || '').replace('#',''); if (h.length!==6) return `rgba(17,24,39,${a})`;
+  const r = parseInt(h.slice(0,2),16); const g = parseInt(h.slice(2,4),16); const b = parseInt(h.slice(4,6),16);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 };
 const contrastOn = (hex: string) => {
-  const h = hex.replace('#',''), r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+  const h = (hex || '').replace('#',''); if (h.length!==6) return '#ffffff';
+  const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
   return (r*299 + g*587 + b*114)/1000 >= 186 ? '#111827' : '#ffffff';
 };
 const sanitizeHex = (c: unknown, fb = '#111827') => isString(c) && /^#[\da-fA-F]{6}$/.test(c.trim()) ? c.trim() : fb;
-const normalizeUrl = (u: string) => {
-  try { const url = new URL(u.startsWith('http') ? u : `https://${u}`); return url.toString(); }
-  catch { return ''; }
-};
+const normalizeUrl = (u: string) => { try { const url = new URL(u.startsWith('http')?u:`https://${u}`); return url.toString(); } catch { return ''; } };
 const fontStackOf = (f: FontFamily) =>
   f==='Inter' ? 'Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial'
 : f==='Roboto'? 'Roboto, ui-sans-serif, system-ui, -apple-system, Segoe UI, Arial'
 : f==='Poppins'? 'Poppins, ui-sans-serif, system-ui, -apple-system, Segoe UI, Arial'
 : 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
 
-/** localStorage’den eski kayıtları yeni şemaya yükselt */
+/** localStorage → yeni şemaya migrate */
 function migrateDraft(raw: unknown): ThemeDraft {
   const d = (raw ?? {}) as Record<string, unknown>;
-  const brand = (d.brand as Record<string, unknown>) ?? {};
-  const navigation = (d.navigation as Record<string, unknown>) ?? {};
-  const home = (d.home as Record<string, unknown>) ?? {};
   const site = (d.site as Record<string, unknown>) ?? {};
+  const shell = (d.shell as Record<string, unknown>) ?? {};
 
-  const tabsUnknown = Array.isArray(navigation.tabs) ? (navigation.tabs as unknown[]) : [];
+  const tabsUnknown = Array.isArray(shell.tabs) ? (shell.tabs as unknown[]) : [];
 
-  const fontCandidate = brand.fontFamily;
-  const fontFamily: FontFamily = (FONT_OPTIONS as readonly string[]).includes(String(fontCandidate))
+  const fontCandidate = shell.fontFamily;
+  const fontFamily: FontFamily = ['System','Inter','Roboto','Poppins'].includes(String(fontCandidate))
     ? (fontCandidate as FontFamily) : 'System';
 
   return {
-    brand: {
-      appName: isString(brand.appName) ? brand.appName : 'Mağazam',
-      primary: sanitizeHex(brand.primary, '#EA580C'),
-      secondary: sanitizeHex(brand.secondary, '#F59E0B'),
-      textColor: sanitizeHex(brand.textColor, '#111827'),
+    site: { url: isString(site.url) ? site.url : 'https://www.arslanzade.com.tr/' },
+    shell: {
+      appName: isString(shell.appName) ? shell.appName : 'Mağazam',
+      primary: sanitizeHex(shell.primary, '#EA580C'),
+      secondary: sanitizeHex(shell.secondary, '#F59E0B'),
+      textColor: sanitizeHex(shell.textColor, '#111827'),
       fontFamily,
-    },
-    navigation: {
       tabs: tabsUnknown.map((t) => {
         const tr = (t ?? {}) as Record<string, unknown>;
         const kindRaw = tr.iconKind;
@@ -90,59 +99,66 @@ function migrateDraft(raw: unknown): ThemeDraft {
           iconImage: isString(tr.iconImage) ? tr.iconImage : '',
         };
       }),
+      bannerEnabled: Boolean(shell.bannerEnabled ?? false),
+      bannerImage: isString(shell.bannerImage) ? shell.bannerImage : SAMPLE_BANNERS[0],
+      bannerLink: isString(shell.bannerLink) ? shell.bannerLink : 'https://ornek.com',
+      noticeText: isString(shell.noticeText) ? shell.noticeText : 'Bugün %15 indirim!',
+      noticeBg: sanitizeHex(shell.noticeBg, '#FFF7ED'), // amber-50
+      noticeTextColor: sanitizeHex(shell.noticeTextColor, '#7C2D12'), // amber-900
     },
-    home: {
-      bannerImage: isString(home.bannerImage) ? home.bannerImage : SAMPLE_BANNERS[0],
-      bannerLink: isString(home.bannerLink) ? home.bannerLink : 'https://ornek.com',
-      noticeText: isString(home.noticeText) ? home.noticeText : 'Bugün %15 indirim!',
-    },
-    site: { url: isString(site.url) ? site.url : '' },
   };
 }
 
-/* ===== Initial ===== */
+/* ========= Initial ========= */
 const initialDraft: ThemeDraft = {
-  brand: { appName: 'Mağazam', primary: '#EA580C', secondary: '#F59E0B', textColor: '#111827', fontFamily: 'System' },
-  navigation: { tabs: [
-    { label:'Home', url:'https://ornek.com', iconKind:'builtin', builtin:'home' },
-    { label:'Shop', url:'https://ornek.com/kategori', iconKind:'builtin', builtin:'shopping_bag' },
-    { label:'Hesap', url:'https://ornek.com/account', iconKind:'builtin', builtin:'person' },
-  ]},
-  home: { bannerImage: SAMPLE_BANNERS[0], bannerLink:'https://ornek.com', noticeText:'Bugün %15 indirim!' },
-  site: { url: 'https://www.arslanzade.com.tr/' }, // örnek
+  site: { url: 'https://www.arslanzade.com.tr/' },
+  shell: {
+    appName: 'Mağazam',
+    primary: '#EA580C',
+    secondary: '#F59E0B',
+    textColor: '#111827',
+    fontFamily: 'System',
+    tabs: [
+      { label:'Home', url:'https://ornek.com', iconKind:'builtin', builtin:'home' },
+      { label:'Shop', url:'https://ornek.com/kategori', iconKind:'builtin', builtin:'shopping_bag' },
+      { label:'Hesap', url:'https://ornek.com/account', iconKind:'builtin', builtin:'person' },
+    ],
+    bannerEnabled: false,
+    bannerImage: SAMPLE_BANNERS[0],
+    bannerLink: 'https://ornek.com',
+    noticeText: 'Bugün %15 indirim!',
+    noticeBg: '#FFF7ED',
+    noticeTextColor: '#7C2D12',
+  },
 };
 
-/* ================= Page ================= */
+/* ============== Page ============== */
 export default function ThemeEditor() {
   const [draft, setDraft] = useState<ThemeDraft>(initialDraft);
   const [webUrl, setWebUrl] = useState<string>(initialDraft.site.url);
-  const [frameKey, setFrameKey] = useState<number>(0); // reload için
+  const [frameKey, setFrameKey] = useState<number>(0);
   const [frameBlocked, setFrameBlocked] = useState<boolean>(false);
   const loadTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // localStorage’tan yükle (UI renkleri etkilenmiyor)
   useEffect(() => {
     try {
       const saved = localStorage.getItem('theme_draft');
       if (saved) {
         const md = migrateDraft(JSON.parse(saved));
         setDraft(md);
-        setWebUrl(md.site.url || initialDraft.site.url);
+        setWebUrl(md.site.url);
       }
     } catch {}
     return () => { if (loadTimer.current) clearTimeout(loadTimer.current); };
   }, []);
 
   /* setters */
-  const setBrand = <K extends keyof ThemeDraft['brand']>(k: K, v: ThemeDraft['brand'][K]) =>
-    setDraft(d => ({ ...d, brand: { ...d.brand, [k]: v } }));
-  const setHome  = <K extends keyof ThemeDraft['home']>(k: K, v: ThemeDraft['home'][K]) =>
-    setDraft(d => ({ ...d, home: { ...d.home, [k]: v } }));
-  const setTab   = <K extends keyof Tab>(i: number, k: K, v: Tab[K]) =>
-    setDraft(d => { const tabs = [...d.navigation.tabs]; tabs[i] = { ...tabs[i], [k]: v }; return { ...d, navigation: { tabs } }; });
-
-  const addTab = () => setDraft(d => ({ ...d, navigation: { tabs: [...d.navigation.tabs, { label:'Yeni', url:'https://ornek.com', iconKind:'emoji', emoji:'✨' }] } }));
-  const removeTab = (i: number) => setDraft(d => ({ ...d, navigation: { tabs: d.navigation.tabs.filter((_,idx)=>idx!==i) } }));
+  const setShell = <K extends keyof ThemeDraft['shell']>(k: K, v: ThemeDraft['shell'][K]) =>
+    setDraft(d => ({ ...d, shell: { ...d.shell, [k]: v } }));
+  const setTab = <K extends keyof Tab>(i: number, k: K, v: Tab[K]) =>
+    setDraft(d => { const tabs = [...d.shell.tabs]; tabs[i] = { ...tabs[i], [k]: v }; return { ...d, shell: { ...d.shell, tabs } }; });
+  const addTab = () => setDraft(d => ({ ...d, shell: { ...d.shell, tabs: [...d.shell.tabs, { label:'Yeni', url:'https://ornek.com', iconKind:'emoji', emoji:'✨' }] } }));
+  const removeTab = (i: number) => setDraft(d => ({ ...d, shell: { ...d.shell, tabs: d.shell.tabs.filter((_, idx)=> idx!==i) } }));
 
   /* actions */
   const saveDraft = () => { localStorage.setItem('theme_draft', JSON.stringify({ ...draft, site:{ url: webUrl } })); alert('Taslak kaydedildi.'); };
@@ -152,17 +168,19 @@ export default function ThemeEditor() {
     setDraft(initialDraft); setWebUrl(initialDraft.site.url); setFrameKey(k=>k+1); setFrameBlocked(false);
   };
 
-  /* Preview‑only theme values (UI’yi etkilemesin) */
-  const { primary, secondary, textColor, fontFamily } = draft.brand;
+  /* preview vars (sadece telefondaki shell'e uygulanır) */
+  const { shell } = draft;
   const previewVars = {
-    '--ap-primary': primary,
-    '--ap-secondary': secondary,
-    '--ap-text': textColor,
-    '--ap-text-on-primary': contrastOn(primary),
-    '--ap-font': fontStackOf(fontFamily),
+    '--ap-primary': shell.primary,
+    '--ap-secondary': shell.secondary,
+    '--ap-text': shell.textColor,
+    '--ap-on-primary': contrastOn(shell.primary),
+    '--ap-font': fontStackOf(shell.fontFamily),
+    '--ap-notice-bg': shell.noticeBg,
+    '--ap-notice-text': shell.noticeTextColor,
   } as React.CSSProperties;
 
-  /* iframe load bloklandıysa (X-Frame-Options / CSP), uyarı göster */
+  /* iframe */
   const onFrameLoad = () => { if (loadTimer.current) clearTimeout(loadTimer.current); setFrameBlocked(false); };
   const tryLoad = () => {
     setFrameBlocked(false);
@@ -172,71 +190,117 @@ export default function ThemeEditor() {
   };
 
   return (
-    // ⚠️ UI renkleri sabit (slate). Buraya theme rengi uygulanmıyor.
+    // Editör UI'si slate tonlarında; tema bu UI'yi ETKİLEMEZ
     <main className="min-h-screen bg-white text-slate-900">
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-xl" style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }} />
+            <div className="h-7 w-7 rounded-xl" style={{ background: `linear-gradient(135deg, ${shell.primary}, ${shell.secondary})` }} />
             <div className="font-semibold">Tema Editörü</div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={saveDraft} className="h-9 rounded-xl border px-4 text-sm font-semibold hover:bg-slate-50 border-slate-300">Taslağı Kaydet</button>
-            <button onClick={publishDraft} className="h-9 rounded-xl px-4 text-sm font-semibold" style={{ background: primary, color: contrastOn(primary) }}>Yayınla</button>
+            <button onClick={publishDraft} className="h-9 rounded-xl px-4 text-sm font-semibold" style={{ background: shell.primary, color: contrastOn(shell.primary) }}>Yayınla</button>
             <button onClick={resetAll} className="h-9 rounded-xl border px-3 text-sm font-semibold hover:bg-red-50 border-slate-300 text-red-700">Sıfırla</button>
           </div>
         </div>
       </div>
 
-      {/* Content */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 grid lg:grid-cols-[1.05fr_0.95fr] gap-8">
-        {/* LEFT – Formlar (sabit slate UI) */}
+        {/* LEFT — Editör */}
         <div className="space-y-8">
-          {/* Site URL */}
+          {/* Webview URL */}
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold">Webview</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto_auto] items-end">
               <div>
                 <label className="text-sm">Site adresi</label>
-                <input
-                  value={webUrl}
-                  onChange={(e)=> setWebUrl(e.target.value)}
-                  className="mt-1 w-full h-11 rounded-xl border border-slate-300 px-3"
-                  placeholder="https://magazan.com"
-                />
+                <input value={webUrl} onChange={(e)=> setWebUrl(e.target.value)} className="mt-1 w-full h-11 rounded-xl border border-slate-300 px-3" placeholder="https://magazan.com" />
               </div>
               <button onClick={tryLoad} className="h-11 rounded-xl border border-slate-300 px-4 hover:bg-slate-50">Yenile</button>
-              <a href={normalizeUrl(webUrl) || '#'} target="_blank" className="h-11 rounded-xl border border-slate-300 px-4 hover:bg-slate-50 flex items-center justify-center">
-                Yeni sekmede aç
-              </a>
+              <a href={normalizeUrl(webUrl) || '#'} target="_blank" className="h-11 rounded-xl border border-slate-300 px-4 hover:bg-slate-50 flex items-center justify-center">Yeni sekmede aç</a>
             </div>
-            <p className="mt-2 text-xs text-slate-500">Not: Bazı siteler güvenlik nedeniyle iframe’e izin vermez (X‑Frame‑Options/CSP). Engellenirse sağdaki telefonda uyarı çıkar.</p>
+            <p className="mt-2 text-xs text-slate-500">Bazı siteler iframe engeller (X‑Frame‑Options/CSP). Engellenirse telefonda uyarı görürsün.</p>
           </section>
 
-          {/* MARKA */}
+          {/* Tema (Shell) */}
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Marka</h2>
+            <h2 className="text-lg font-semibold">Tema (Uygulama Kabuğu)</h2>
             <div className="mt-5 grid gap-5 md:grid-cols-2">
               <div>
                 <label className="text-sm">Uygulama Adı</label>
-                <input value={draft.brand.appName} onChange={(e)=> setBrand('appName', e.target.value)} className="mt-1 w-full h-11 rounded-xl border border-slate-300 px-3" placeholder="Mağaza adı" />
+                <input value={shell.appName} onChange={(e)=> setShell('appName', e.target.value)} className="mt-1 w-full h-11 rounded-xl border border-slate-300 px-3" placeholder="Mağaza adı" />
               </div>
-              <ColorPicker label="Ana Renk (Primary)" value={primary} onChange={(v)=> setBrand('primary', v)} />
-              <ColorPicker label="İkincil Renk (Secondary)" value={secondary} onChange={(v)=> setBrand('secondary', v)} />
-              <ColorPicker label="Yazı Rengi" value={textColor} onChange={(v)=> setBrand('textColor', v)} />
-              <FontPicker label="Yazı Tipi (Font)" value={fontFamily} onChange={(v)=> setBrand('fontFamily', v)} />
+              <ColorPicker label="Ana Renk (Primary)" value={shell.primary} onChange={(v)=> setShell('primary', v)} />
+              <ColorPicker label="İkincil Renk (Secondary)" value={shell.secondary} onChange={(v)=> setShell('secondary', v)} />
+              <ColorPicker label="Metin Rengi" value={shell.textColor} onChange={(v)=> setShell('textColor', v)} />
+              <FontPicker label="Yazı Tipi" value={shell.fontFamily} onChange={(v)=> setShell('fontFamily', v)} />
             </div>
           </section>
 
-          {/* NAV */}
+          {/* Duyuru (Seçmeli) */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Duyuru Alanı</h2>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={shell.bannerEnabled} onChange={(e)=> setShell('bannerEnabled', e.target.checked)} />
+                <span>Aktif</span>
+              </label>
+            </div>
+
+            {shell.bannerEnabled && (
+              <div className="mt-4 grid gap-5">
+                <div className="grid md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="text-sm">Duyuru Metni</label>
+                    <input value={shell.noticeText ?? ''} onChange={(e)=> setShell('noticeText', e.target.value)}
+                      className="mt-1 w-full h-11 rounded-xl border border-slate-300 px-3" placeholder="Örn. Bugün %15 indirim!" />
+                  </div>
+                  <div>
+                    <label className="text-sm">Banner Linki</label>
+                    <input value={shell.bannerLink ?? ''} onChange={(e)=> setShell('bannerLink', e.target.value)}
+                      className="mt-1 w-full h-11 rounded-xl border border-slate-300 px-3" placeholder="https://..." />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm">Banner Görseli (URL)</label>
+                  <input value={shell.bannerImage ?? ''} onChange={(e)=> setShell('bannerImage', e.target.value)}
+                    className="mt-1 w-full h-11 rounded-xl border border-slate-300 px-3" placeholder="https://..." />
+                  <div className="mt-2">
+                    <ThemeUploader text="Banner Yükle" onUploaded={(url)=> setShell('bannerImage', url)} />
+                    <p className="mt-1 text-xs text-slate-500">JPG/PNG, max 4MB.</p>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    {SAMPLE_BANNERS.map((src)=>(
+                      <button key={src} type="button" onClick={()=> setShell('bannerImage', src)}
+                        className={cn('relative h-16 w-28 overflow-hidden rounded-xl border border-slate-300',
+                          (shell.bannerImage ?? '') === src && 'ring-2 ring-offset-2 ring-amber-500')}>
+                        <Image src={src} alt="sample" fill sizes="112px" className="object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-5">
+                  <ColorPicker label="Duyuru Arka Plan" value={shell.noticeBg ?? '#FFF7ED'} onChange={(v)=> setShell('noticeBg', v)} />
+                  <ColorPicker label="Duyuru Yazı Rengi" value={shell.noticeTextColor ?? '#7C2D12'} onChange={(v)=> setShell('noticeTextColor', v)} />
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Alt Menü (Zorunlu) */}
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Alt Menü</h2>
               <button onClick={addTab} className="h-9 rounded-lg border border-slate-300 px-3 text-sm hover:bg-slate-50">Sekme Ekle</button>
             </div>
+
             <div className="mt-4 space-y-6">
-              {draft.navigation.tabs.map((t, i) => (
+              {shell.tabs.map((t, i) => (
                 <div key={i} className="grid gap-3 md:grid-cols-2">
                   <div className="grid gap-3">
                     <div>
@@ -296,101 +360,79 @@ export default function ThemeEditor() {
               ))}
             </div>
           </section>
-
-          {/* HOME (banner vs – preview tarafında da kullanılır) */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Ana Sayfa</h2>
-            <div className="mt-4 grid gap-5">
-              <div>
-                <label className="text-sm">Banner Görseli (URL)</label>
-                <input value={draft.home.bannerImage} onChange={(e)=> setHome('bannerImage', e.target.value)}
-                  className="mt-1 w-full h-11 rounded-xl border border-slate-300 px-3" placeholder="https://..." />
-                <div className="mt-2"><ThemeUploader text="Banner Yükle" onUploaded={(url)=> setHome('bannerImage', url)} />
-                  <p className="mt-1 text-xs text-slate-500">JPG/PNG, max 4MB.</p></div>
-                <div className="mt-3 flex flex-wrap gap-3">
-                  {SAMPLE_BANNERS.map((src)=>(
-                    <button key={src} type="button" onClick={()=> setHome('bannerImage', src)}
-                      className={cn('relative h-16 w-28 overflow-hidden rounded-xl border border-slate-300',
-                        draft.home.bannerImage === src && 'ring-2 ring-offset-2 ring-amber-500')}>
-                      <Image src={src} alt="sample" fill sizes="112px" className="object-cover" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-5">
-                <div>
-                  <label className="text-sm">Banner Linki</label>
-                  <input value={draft.home.bannerLink} onChange={(e)=> setHome('bannerLink', e.target.value)}
-                    className="mt-1 w-full h-11 rounded-xl border border-slate-300 px-3" placeholder="https://..." />
-                </div>
-                <div>
-                  <label className="text-sm">Duyuru Metni</label>
-                  <input value={draft.home.noticeText} onChange={(e)=> setHome('noticeText', e.target.value)}
-                    className="mt-1 w-full h-11 rounded-xl border border-slate-300 px-3" placeholder="Örn. Bugün %15 indirim!" />
-                </div>
-              </div>
-            </div>
-          </section>
         </div>
 
-        {/* RIGHT – Telefon çerçevesi + Webview + App preview */}
+        {/* RIGHT — Telefon çerçevesi: WebView + Shell overlay (duyuru + alt menü) */}
         <div className="space-y-4">
-          {/* Telefon Frame + Webview */}
-          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Webview Önizleme</h3>
-            <PhoneFrame>
-              {(normalizeUrl(webUrl)) ? (
-                <iframe
-                  key={frameKey}
-                  src={normalizeUrl(webUrl)}
-                  className="h-full w-full rounded-[32px] bg-white"
-                  sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-                  onLoad={onFrameLoad}
-                />
-              ) : (
-                <FrameFallback text="Geçerli bir URL girin" />
-              )}
-              {frameBlocked && <FrameFallback text="Site iframe’e izin vermiyor (X-Frame-Options/CSP). Yeni sekmede açıp kontrol edin." />}
-            </PhoneFrame>
-            <div className="mt-2 text-xs text-slate-500">Boyut: 390×844 (iPhone 14 Pro).</div>
-          </section>
-
-          {/* App mock preview – sadece burada tema renkleri uygulanır */}
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="text-sm font-semibold text-slate-700 mb-3">Uygulama Önizleme</h3>
-            <div className="mx-auto max-w-sm" style={previewVars as React.CSSProperties}>
-              <div className="h-10 rounded-2xl flex items-center justify-center text-xs font-medium"
-                   style={{ background: hexToRgba(primary, .08), color: 'var(--ap-text)', fontFamily: 'var(--ap-font)' }}>
-                {draft.brand.appName}
-              </div>
 
-              <div className="mt-4 rounded-2xl overflow-hidden border" style={{ borderColor: 'rgba(0,0,0,.08)' }}>
-                <Image src={draft.home.bannerImage} alt="banner" width={800} height={400} className="w-full h-40 object-cover" />
-              </div>
+            <div className="mx-auto w-[390px]">
+              <div className="relative mx-auto h-[844px] w-[390px] rounded-[48px] border border-slate-300 bg-slate-900/90 shadow-[0_10px_40px_rgba(0,0,0,.25)] overflow-hidden"
+                   style={previewVars as React.CSSProperties}>
+                {/* notch */}
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 h-6 w-36 rounded-b-2xl bg-black/80 z-30" />
 
-              <div className="mt-4 text-sm rounded-xl border p-3"
-                   style={{ borderColor: 'var(--ap-primary)', background: hexToRgba(primary, .08), color: 'var(--ap-text)' }}>
-                <div className="font-semibold mb-1" style={{ color: 'var(--ap-primary)' }}>Duyuru</div>
-                <div>{draft.home.noticeText}</div>
-              </div>
+                {/* inner screen */}
+                <div className="absolute inset-1 rounded-[40px] overflow-hidden bg-white">
+                  {/* --- WebView (iframe) --- */}
+                  {normalizeUrl(webUrl) ? (
+                    <iframe
+                      key={frameKey}
+                      src={normalizeUrl(webUrl)}
+                      className="h-full w-full"
+                      sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                      onLoad={onFrameLoad}
+                    />
+                  ) : (
+                    <FrameFallback text="Geçerli bir URL girin" />
+                  )}
+                  {frameBlocked && <FrameFallback text="Site iframe’e izin vermiyor (X‑Frame‑Options/CSP)" />}
 
-              <div className="mt-4 grid grid-cols-3 gap-2 text-xs" style={{ color: 'var(--ap-text)', fontFamily: 'var(--ap-font)' }}>
-                {draft.navigation.tabs.map((t, i) => (
-                  <div key={i} className="rounded-xl border px-2 py-3 text-center" style={{ borderColor: 'rgba(0,0,0,.08)' }}>
-                    <div className="h-6 flex items-center justify-center mb-1">
-                      {t.iconKind === 'emoji' && <span className="text-lg">{t.emoji ?? '✨'}</span>}
-                      {t.iconKind === 'image' && t.iconImage?.startsWith('http') && (
-                        <span className="inline-block h-5 w-5 relative">
-                          <Image src={t.iconImage} alt="icon" fill sizes="20px" className="object-contain" unoptimized />
-                        </span>
-                      )}
-                      {t.iconKind === 'builtin' && <span className="text-lg" style={{ color: 'var(--ap-secondary)' }}>✨</span>}
+                  {/* --- Shell Overlay: Duyuru (opsiyonel) --- */}
+                  {shell.bannerEnabled && (
+                    <a
+                      href={shell.bannerLink || '#'}
+                      target="_blank"
+                      className="absolute left-3 right-3 top-3 z-40 rounded-xl border px-3 py-2 text-xs font-medium"
+                      style={{ background: shell.noticeBg, color: shell.noticeTextColor, borderColor: hexToRgba('#000', .15), fontFamily: 'var(--ap-font)' }}
+                    >
+                      <div className="flex items-center gap-2">
+                        {shell.bannerImage && (
+                          <span className="relative inline-block h-6 w-10 overflow-hidden rounded">
+                            <Image src={shell.bannerImage} alt="banner" fill sizes="40px" className="object-cover" />
+                          </span>
+                        )}
+                        <span>{shell.noticeText}</span>
+                      </div>
+                    </a>
+                  )}
+
+                  {/* --- Shell Overlay: Alt Menü (zorunlu) --- */}
+                  <div className="absolute inset-x-3 bottom-3 z-40 rounded-2xl border bg-white/95 backdrop-blur px-2 py-2"
+                       style={{ borderColor: hexToRgba('#000', .12), fontFamily: 'var(--ap-font)', color:'var(--ap-text)' }}>
+                    <div className="grid grid-cols-3 gap-2">
+                      {shell.tabs.map((t, i) => (
+                        <a key={i} href={t.url} target="_blank"
+                           className="rounded-xl border px-2 py-2 text-center text-[11px] hover:bg-slate-50"
+                           style={{ borderColor: hexToRgba('#000', .08) }}>
+                          <div className="h-5 mb-1 flex items-center justify-center">
+                            {t.iconKind === 'emoji' && <span className="text-lg">{t.emoji ?? '✨'}</span>}
+                            {t.iconKind === 'image' && t.iconImage?.startsWith('http') && (
+                              <span className="inline-block h-4 w-4 relative">
+                                <Image src={t.iconImage} alt="icon" fill sizes="16px" className="object-contain" unoptimized />
+                              </span>
+                            )}
+                            {t.iconKind === 'builtin' && <span className="text-lg" style={{ color: 'var(--ap-secondary)' }}>✨</span>}
+                          </div>
+                          <div className="font-medium">{t.label}</div>
+                        </a>
+                      ))}
                     </div>
-                    <div className="font-medium">{t.label}</div>
                   </div>
-                ))}
+                </div>
               </div>
+              <div className="mt-2 text-xs text-slate-500">Boyut: 390×844 (iPhone 14 Pro). Tema sadece bu önizlemeye uygulanır.</div>
             </div>
           </section>
         </div>
@@ -399,24 +441,10 @@ export default function ThemeEditor() {
   );
 }
 
-/* ===== Reusable UI ===== */
-function PhoneFrame({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto w-[390px]">
-      <div className="relative mx-auto h-[844px] w-[390px] rounded-[48px] border border-slate-300 bg-slate-900/90 shadow-[0_10px_40px_rgba(0,0,0,.25)] overflow-hidden">
-        {/* notch */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 h-6 w-36 rounded-b-2xl bg-black/80 z-20" />
-        {/* inner bezels */}
-        <div className="absolute inset-1 rounded-[40px] bg-white overflow-hidden">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
+/* ========= Subcomponents ========= */
 function FrameFallback({ text }: { text: string }) {
   return (
-    <div className="flex h-full w-full items-center justify-center rounded-[32px] bg-slate-50 text-slate-500 p-6 text-center">
+    <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-500 p-6 text-center">
       {text}
     </div>
   );
@@ -457,10 +485,11 @@ function FontPicker(props: { label: string; value: FontFamily; onChange: (v: Fon
         className="mt-2 h-11 w-full rounded-xl border border-slate-300 px-3">
         {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
       </select>
-      <p className="mt-1 text-xs text-slate-500">Not: Özel font yükleme bir sonraki sürümde.</p>
+      <p className="mt-1 text-xs text-slate-500">Özel font yükleme sonraki sürümde.</p>
     </div>
   );
 }
+
 function SegButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick}
