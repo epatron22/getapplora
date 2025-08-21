@@ -1,4 +1,10 @@
+'use client';
+
 export default function Dashboard() {
+  const buildAndroid = () => {
+    alert('(Demo) Build kuyruğa alındı!');
+  };
+
   return (
     <main className="min-h-screen px-6 py-10">
       <h1 className="text-2xl font-bold">Proje Paneli</h1>
@@ -14,7 +20,8 @@ export default function Dashboard() {
 
         <button
           className="h-11 rounded-xl border border-slate-300 px-5 font-semibold hover:bg-slate-50 text-left"
-          onClick={() => alert('(Demo) Build kuyruğa alındı!')}
+          onClick={buildAndroid}
+          type="button"
         >
           Build Al (Android)
         </button>
