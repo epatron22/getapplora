@@ -41,7 +41,45 @@ const SAMPLE_BANNERS = [
 ];
 const COLOR_SWATCHES = ['#111827','#000000','#374151','#6B7280','#EA580C','#F59E0B','#0EA5E9','#22C55E','#8B5CF6','#EF4444','#FFFFFF'];
 const EMOJI_SET = ['🏠','🛍️','👤','❤️','🔎','ℹ️','⭐️','🔥','✨','🧁','🍫','🛒'];
+// ---- MIGRATION: eski draft'ları yeni şemaya yükselt ----
+function sanitizeHex(c?: string, fallback = '#111827') {
+  if (typeof c !== 'string') return fallback;
+  const m = c.trim();
+  return /^#[0-9A-Fa-f]{6}$/.test(m) ? m : fallback;
+}
+function migrateDraft(raw: any): ThemeDraft {
+  const d = raw ?? {};
+  d.brand = d.brand ?? {};
+  d.navigation = d.navigation ?? {};
+  d.home = d.home ?? {};
 
+  return {
+    brand: {
+      appName: typeof d.brand.appName === 'string' ? d.brand.appName : 'Mağazam',
+      primary: sanitizeHex(d.brand.primary, '#EA580C'),
+      secondary: sanitizeHex(d.brand.secondary, '#F59E0B'),
+      textColor: sanitizeHex(d.brand.textColor, '#111827'), // <-- eksikse doldur
+      fontFamily: ['System','Inter','Roboto','Poppins'].includes(d.brand.fontFamily)
+        ? d.brand.fontFamily
+        : 'System',
+    },
+    navigation: {
+      tabs: Array.isArray(d.navigation.tabs) ? d.navigation.tabs.map((t: any) => ({
+        label: typeof t?.label === 'string' ? t.label : 'Yeni',
+        url: typeof t?.url === 'string' ? t.url : 'https://ornek.com',
+        iconKind: t?.iconKind === 'image' || t?.iconKind === 'emoji' || t?.iconKind === 'builtin' ? t.iconKind : 'builtin',
+        builtin: t?.builtin ?? 'home',
+        emoji: typeof t?.emoji === 'string' ? t.emoji : '✨',
+        iconImage: typeof t?.iconImage === 'string' ? t.iconImage : '',
+      })) : [],
+    },
+    home: {
+      bannerImage: typeof d.home.bannerImage === 'string' ? d.home.bannerImage : SAMPLE_BANNERS[0],
+      bannerLink: typeof d.home.bannerLink === 'string' ? d.home.bannerLink : 'https://ornek.com',
+      noticeText: typeof d.home.noticeText === 'string' ? d.home.noticeText : 'Bugün %15 indirim!',
+    },
+  };
+}
 /* -------- helpers (renk) --------- */
 function hexToRgba(hex: string, alpha = 1) {
   const h = hex.replace('#','');
@@ -82,9 +120,14 @@ export default function ThemeEditor() {
   const [draft, setDraft] = useState<ThemeDraft>(initialDraft);
 
   useEffect(() => {
+  try {
     const saved = localStorage.getItem('theme_draft');
-    if (saved) setDraft(JSON.parse(saved) as ThemeDraft);
-  }, []);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setDraft(migrateDraft(parsed)); // <-- doğrudan parsed değil, migrate edilmiş hali
+    }
+  } catch {}
+}, []);
 
   // setters
   const setBrand = <K extends keyof ThemeDraft['brand']>(k: K, v: ThemeDraft['brand'][K]) =>
@@ -363,6 +406,8 @@ export default function ThemeEditor() {
 /* ---------------- components ---------------- */
 function ColorPicker(props: { label: string; value: string; onChange: (val: string) => void }) {
   const { label, value, onChange } = props;
+  const safe = typeof value === 'string' ? value : '#111827'; // <-- guard
+
   return (
     <div>
       <label className="text-sm">{label}</label>
@@ -374,14 +419,16 @@ function ColorPicker(props: { label: string; value: string; onChange: (val: stri
               type="button"
               title={c}
               onClick={() => onChange(c)}
-              className={cn('h-8 w-8 rounded-md border', value.toLowerCase() === c.toLowerCase() && 'ring-2 ring-offset-2 ring-amber-500')}
+              className={
+                'h-8 w-8 rounded-md border' + (safe.toLowerCase() === c.toLowerCase() ? ' ring-2 ring-offset-2 ring-amber-500' : '')
+              }
               style={{ background: c, borderColor: 'rgba(0,0,0,.15)' }}
             />
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-9 w-9 rounded border p-0" />
-          <input value={value} onChange={(e) => onChange(e.target.value)} className="h-9 w-32 rounded-xl border px-2 text-sm"
+          <input type="color" value={safe} onChange={(e) => onChange(e.target.value)} className="h-9 w-9 rounded border p-0" />
+          <input value={safe} onChange={(e) => onChange(e.target.value)} className="h-9 w-32 rounded-xl border px-2 text-sm"
                  style={{ borderColor: 'rgba(0,0,0,.15)' }} />
         </div>
       </div>
