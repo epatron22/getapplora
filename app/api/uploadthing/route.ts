@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
       cart: cart || new URL('/cart', base).toString(),
       orders: orders || new URL('/account/orders', base).toString(),
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'fetch-failed' }, { status: 500 });
-  }
+  // SONRA
+} catch (err: unknown) {
+  const message = err instanceof Error ? err.message : 'uploadthing-route-failed';
+  return NextResponse.json({ error: message }, { status: 500 });
+}
 }

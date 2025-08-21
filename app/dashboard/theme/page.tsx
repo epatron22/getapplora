@@ -209,11 +209,14 @@ export default function ThemeEditor() {
       ];
       setDraft(d => ({ ...d, shell: { ...d.shell, tabs } }));
       alert('Menü bağlantıları çekildi.');
-    } catch (e: any) {
-      alert(`Alınamadı: ${e?.message ?? 'Hata'}`);
-    } finally {
-      setIngesting(false);
-    }
+    // ÖNCE
+// SONRA
+} catch (err: unknown) {
+  const msg = err instanceof Error ? err.message : 'Hata';
+  alert(`Alınamadı: ${msg}`);
+} finally {
+  setIngesting(false);
+}
   };
 
   return (
